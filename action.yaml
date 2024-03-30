@@ -1,0 +1,17 @@
+name: calver
+description: Tags commits based on CalVer strategy
+inputs:
+  variant:
+    required: false
+    description: Variant tag to pass to CalVer
+runs:
+  using: composite
+  steps:
+    # - name: Checkout
+    #   uses: actions/checkout@v4
+    #   with:
+    #     fetch-depth: 0
+    - name: Version
+      run: |
+        sudo curl -s -o /usr/local/bin/calver.sh https://raw.githubusercontent.com/acrois/scripts/HEAD/shell/calver.sh && sudo chmod +x /usr/local/bin/calver.sh
+        calver.sh --auto --apply --push
