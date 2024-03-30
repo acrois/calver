@@ -1,5 +1,7 @@
 # calver
 
+[![Build Image](https://github.com/acrois/scripts/actions/workflows/build.yaml/badge.svg)](https://github.com/acrois/scripts/actions/workflows/build.yaml)
+
 Give each commit in your repo a version.
 
 [calver.sh](./calver.sh) - Utility for automatically tagging git repositories using [CalVer](https://calver.org/).
@@ -8,7 +10,7 @@ Give each commit in your repo a version.
 
 GitHub Action enabling [CalVer](https://calver.org/) tagging.
 
-Example of usage in GitHub Actions Workflow:
+Example of usage in [GitHub Actions Workflow](https://github.com/acrois/scripts/actions/workflows/calver.yaml):
 
 ```yaml
 name: CalVer Tagging
@@ -35,7 +37,7 @@ jobs:
 ## Docker Usage
 
 ```sh
-docker run --rm ghcr.io/acrois/scripts calver.sh --help
+docker run --rm -v "$PWD:/run" ghcr.io/acrois/scripts calver.sh --help
 ```
 
 ## CLI Install
