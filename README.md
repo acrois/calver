@@ -34,6 +34,10 @@ jobs:
 
 ## Docker Usage
 
+```sh
+docker run --rm ghcr.io/acrois/scripts calver.sh --help
+```
+
 ## CLI Install
 
 Simply run the following:
