@@ -12,6 +12,7 @@ runs:
     #   with:
     #     fetch-depth: 0
     - name: Version
+      shell: bash
       run: |
         sudo curl -s -o /usr/local/bin/calver.sh https://raw.githubusercontent.com/acrois/scripts/HEAD/shell/calver.sh && sudo chmod +x /usr/local/bin/calver.sh
         calver.sh --auto --apply --push
