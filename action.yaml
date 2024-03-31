@@ -14,5 +14,6 @@ runs:
     - name: Version
       shell: bash
       run: |
-        sudo curl -s -o /usr/local/bin/calver.sh https://raw.githubusercontent.com/acrois/calver/HEAD/calver.sh && sudo chmod +x /usr/local/bin/calver.sh
-        calver.sh --auto --apply --push
+        sudo curl -s -o /usr/local/bin/calver https://raw.githubusercontent.com/acrois/calver/HEAD/calver
+        sudo chmod +x /usr/local/bin/calver
+        calver --auto --apply --push
