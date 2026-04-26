@@ -727,15 +727,7 @@ _main() {
         echo "================================="
     fi
 
-    # You are either tagging a variant or the main version
-    if [ -z "$SEMIVER" ]; then
-        tag "$GIT_SHA" "$VER"
-    else
-        tag "$GIT_SHA" "$SEMIVER"
-    fi
-
-    # You are always tagging a revision
-    tag "$GIT_SHA" "$FULLVER"
+    tag_commit "$GIT_SHA" "${SEMIVER:-$VER}" "$FULLVER"
 }
 
 # If we are sourced from elsewhere, don't perform any further actions
