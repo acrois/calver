@@ -40,12 +40,12 @@ jobs:
 
       - name: Apply CalVer tags
         shell: bash
-        # env:
-        #   APP_PUSH_TOKEN: ${{ steps.generate-token.outputs.token }}
+        env:
+          APP_PUSH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # if [ -n "$APP_PUSH_TOKEN" ]; then
-          #   git remote set-url origin "https://x-access-token:${APP_PUSH_TOKEN}@github.com/${{ github.repository }}.git"
-          # fi
+          if [ -n "$APP_PUSH_TOKEN" ]; then
+            git remote set-url origin "https://x-access-token:${APP_PUSH_TOKEN}@github.com/${{ github.repository }}.git"
+          fi
           ./calver --auto --backfill-all --backfill-base-ref= --apply --push
