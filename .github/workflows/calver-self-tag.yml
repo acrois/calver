@@ -15,9 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Generate GitHub App token (optional)
-        if: ${{ github.server_url == 'https://github.com' && secrets.APP_CLIENT_ID != '' && secrets.APP_PRIVATE_KEY != '' }}
+        if: ${{ github.server_url == 'https://github.com' }}
         id: generate-token
         uses: actions/create-github-app-token@v1
+        continue-on-error: true
         with:
           app-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
