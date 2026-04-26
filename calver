@@ -58,6 +58,7 @@ tag() {
     local TAG_SHA=
 
     TAG_SHA="$(git rev-list -n 1 "$TAG" 2>/dev/null || true)"
+    TAG_MESSAGE="CalVer tag $TAG for $SHA"
 
     if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" = "$SHA" ]; then
         echo "Tag $TAG already points at $SHA"
@@ -71,7 +72,7 @@ tag() {
                 return 0
             fi
 
-            git tag -f "$TAG" "$SHA"
+            git tag -f "$TAG" "$SHA" -m "$TAG_MESSAGE"
             push_tags
             echo "Moved $TAG -> $SHA (was $TAG_SHA)"
             return 0
@@ -82,7 +83,6 @@ tag() {
 
     if [ $DRY_RUN = false ]; then
         # Respect repository git config for signing/annotation behavior.
-        TAG_MESSAGE="CalVer tag $TAG for $SHA"
         git tag "$TAG" "$SHA" -m "$TAG_MESSAGE"
 
         push_tags
