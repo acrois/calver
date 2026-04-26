@@ -15,11 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           fetch-tags: true
 
       - name: Apply CalVer tags
         shell: bash
-        run: ./calver --auto --backfill-all --backfill-base-branch= --apply --push
+        run: ./calver --auto --backfill-all --backfill-base-ref= --apply --push
