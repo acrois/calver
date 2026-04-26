@@ -11,6 +11,8 @@ set -eo pipefail
 FORMAT=
 DRY_RUN=true
 PUSH=false
+DEFER_TAG_PUSH=false
+TAG_PUSH_NEEDED=false
 AUTO_VARIANT=false
 BACKFILL=false
 BACKFILL_DAYS=1
@@ -31,6 +33,23 @@ GIT_SHA=
 BRANCH=
 
 declare -A NEXT_REV_BY_BASE
+
+push_tags() {
+    if [ "$PUSH" = true ]; then
+        if [ "$DEFER_TAG_PUSH" = true ]; then
+            TAG_PUSH_NEEDED=true
+        else
+            git push origin -f --tags
+        fi
+    fi
+}
+
+flush_deferred_tag_push() {
+    if [ "$PUSH" = true ] && [ "$TAG_PUSH_NEEDED" = true ]; then
+        git push origin -f --tags
+        TAG_PUSH_NEEDED=false
+    fi
+}
 
 tag() {
     local SHA="$1"
@@ -53,9 +72,7 @@ tag() {
             fi
 
             git tag -f "$TAG" "$SHA"
-            if [ $PUSH = true ]; then
-                git push origin -f --tags
-            fi
+            push_tags
             echo "Moved $TAG -> $SHA (was $TAG_SHA)"
             return 0
         fi
@@ -68,9 +85,7 @@ tag() {
         TAG_MESSAGE="CalVer tag $TAG for $SHA"
         git tag "$TAG" "$SHA" -m "$TAG_MESSAGE"
 
-        if [ $PUSH = true ]; then
-            git push origin -f --tags
-        fi
+        push_tags
 
         echo "Tagged $TAG -> $SHA"
     else
@@ -376,8 +391,11 @@ process_backfill() {
     local RESOLVED_BASE_REF=
     local SHA=
     local FOUND=0
+    local PREVIOUS_DEFER_TAG_PUSH="$DEFER_TAG_PUSH"
 
     RANGE="$HEAD_SHA"
+    DEFER_TAG_PUSH=true
+    TAG_PUSH_NEEDED=false
     EFFECTIVE_BASE_REF="$BACKFILL_BASE_REF"
     if [ "$BACKFILL_BASE_REF_SET" = true ] && [ -z "$EFFECTIVE_BASE_REF" ]; then
         EFFECTIVE_BASE_REF="$(detect_primary_branch || true)"
@@ -455,6 +473,9 @@ process_backfill() {
         build_version_for_commit "$HEAD_SHA"
         tag_commit "$HEAD_SHA" "${SEMIVER:-$VER}" "$FULLVER"
     fi
+
+    flush_deferred_tag_push
+    DEFER_TAG_PUSH="$PREVIOUS_DEFER_TAG_PUSH"
 }
 
 usage() {

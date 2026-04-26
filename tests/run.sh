@@ -155,6 +155,39 @@ test_backfill_all_tags_entire_history() {
     rm -rf "$repo"
 }
 
+test_backfill_pushes_tags_once() {
+    local repo git_wrapper_dir push_log real_git push_count push_command
+    repo="$(new_repo)"
+    create_commit "$repo" "2026-04-20T09:00:00Z" "one" >/dev/null
+    create_commit "$repo" "2026-04-21T09:00:00Z" "two" >/dev/null
+    create_commit "$repo" "2026-04-24T09:00:00Z" "three" >/dev/null
+    git_wrapper_dir="$(mktemp -d)"
+    push_log="$git_wrapper_dir/push.log"
+    real_git="$(command -v git)"
+
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'set -euo pipefail' \
+        'if [ "${1:-}" = push ]; then' \
+        '    printf "%s\n" "$*" >> "$PUSH_LOG"' \
+        '    exit 0' \
+        'fi' \
+        'exec "$REAL_GIT" "$@"' > "$git_wrapper_dir/git"
+    chmod +x "$git_wrapper_dir/git"
+
+    (
+        cd "$repo"
+        PATH="$git_wrapper_dir:$PATH" REAL_GIT="$real_git" PUSH_LOG="$push_log" "$CALVER" --backfill-all --apply --push >/dev/null
+    )
+
+    push_count="$(wc -l < "$push_log" | tr -d ' ')"
+    assert_eq "1" "$push_count" "backfill should push all tags once"
+    push_command="$(<"$push_log")"
+    assert_eq "push origin -f --tags" "$push_command" "backfill should use one full tag push"
+
+    rm -rf "$repo" "$git_wrapper_dir"
+}
+
 test_backfill_base_ref_limits_to_branch_commits() {
     local repo main_sha_a main_sha_b feature_sha
     repo="$(new_repo)"
@@ -254,6 +287,7 @@ main() {
     test_backfill_rerun_is_stable
     test_base_tag_tracks_latest_commit
     test_backfill_all_tags_entire_history
+    test_backfill_pushes_tags_once
     test_backfill_base_ref_limits_to_branch_commits
     test_backfill_empty_base_ref_defaults_to_primary_branch
     test_non_git_show_calendar_still_works
