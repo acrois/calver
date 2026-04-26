@@ -39,6 +39,7 @@ jobs:
               # echo "MATCH: $ref"
             fi
           done | jq -R -s -c 'split("\n")[:-1]')
+          [ -n "$TAGS" ] || TAGS='[]'
           echo "MATRIX=$TAGS" >> $GITHUB_OUTPUT
     outputs:
       matrix: ${{ steps.set-matrix.outputs.MATRIX }}

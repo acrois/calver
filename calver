@@ -490,33 +490,38 @@ usage() {
     format_variant --o='FULLVER' --i=$VER --v=$VARIANT --r=$REV
     format_variant --o='SEMIVER' --i=$VER --v=$VARIANT
 
-    echo -e "\nUsage:\n" \
-        "\t$0 --version=\"$VER\" --variant=\"$VARIANT\" --revision=\"$REV\"\n" \
-        "\t$0 --date=\"$FROM_DATE\" --variant=\"$VARIANT\" --revision=\"$REV\"\n" \
-        "\nOutput tags:\n" \
-        "\tRevision:  $FULLVER\n" \
-        "\tVariant:   $SEMIVER\n" \
-        "\tCalendar:  $VER\n" \
-        "\nFlags:\n" \
-        "\t--format            - date format, defaults to %Y.%V.%u according to \`man date\`\n" \
-        "\t--version           - version to release\n" \
-        "\t--date              - date to base version off of\n" \
-        "\t--auto              - automatically creates variants based on branch name.\n" \
-        "\t                        if on main, master, or trunk it is \"\".\n" \
-        "\t                        if there is no branch, it is \"detached\".\n" \
-        "\t--variant           - adds a variant tag e.g $LESSVER\n" \
-        "\t--revision          - adds a revision incrementer after the variant e.g $FULLVER\n" \
-        "\t--prefix            - adds a prefix in front of the version e.g node/$FULLVER\n" \
-        "\t--backfill          - tags untagged commits from at least one day before HEAD\n" \
-        "\t--backfill-days     - days to backfill from HEAD commit timestamp (default: 1)\n" \
-        "\t--backfill-all      - backfills tags for the entire reachable history from HEAD\n" \
-        "\t--backfill-base-ref - limit backfill to commits after merge-base with this ref (empty: auto primary)\n" \
-        "\t--clear-branch-tags - clear tags that point at commits in the backfill range\n" \
-        "\t--apply             - disable dry run and do it for real\n" \
-        "\t--push              - push after applying\n" \
-        "\t--show              - show version tag (values: calendar, variant, revision)\n" \
-        "\t--v                 - verbose output (\`set -x\`)\n" \
-        "\t--help              - prints this useful information\n" >&2
+    cat <<EOF >&2
+
+Usage:
+	$0 --version="$VER" --variant="$VARIANT" --revision="$REV"
+	$0 --date="$FROM_DATE" --variant="$VARIANT" --revision="$REV"
+
+Output tags:
+	Revision:  $FULLVER
+	Variant:   $SEMIVER
+	Calendar:  $VER
+
+Flags:
+	--format            - date format, defaults to %Y.%V.%u according to \`man date\`
+	--version           - version to release
+	--date              - date to base version off of
+	--auto              - automatically creates variants based on branch name.
+	                        if on main, master, or trunk it is "".
+	                        if there is no branch, it is "detached".
+	--variant           - adds a variant tag e.g $LESSVER
+	--revision          - adds a revision incrementer after the variant e.g $FULLVER
+	--prefix            - adds a prefix in front of the version e.g node/$FULLVER
+	--backfill          - tags untagged commits from at least one day before HEAD
+	--backfill-days     - days to backfill from HEAD commit timestamp (default: 1)
+	--backfill-all      - backfills tags for the entire reachable history from HEAD
+	--backfill-base-ref - limit backfill to commits after merge-base with this ref (empty: auto primary)
+	--clear-branch-tags - clear tags that point at commits in the backfill range
+	--apply             - disable dry run and do it for real
+	--push              - push after applying
+	--show              - show version tag (values: calendar, variant, revision)
+	--v                 - verbose output (\`set -x\`)
+	--help              - prints this useful information
+EOF
     exit 1
 }
 

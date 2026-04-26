@@ -83,6 +83,7 @@ jobs:
               # echo "MATCH: $ref"
             fi
           done | jq -R -s -c 'split("\n")[:-1]')
+          [ -n "$TAGS" ] || TAGS='[]'
           echo "MATRIX=$TAGS" >> $GITHUB_OUTPUT
     outputs:
       matrix: ${{ steps.set-matrix.outputs.MATRIX }}
@@ -152,6 +153,9 @@ Flags:
         --prefix            - adds a prefix in front of the version e.g node/2023.19.03-dev.10
         --backfill          - tags untagged commits from at least one day before HEAD
         --backfill-days     - days to backfill from HEAD commit timestamp (default: 1)
+        --backfill-all      - backfills tags for the entire reachable history from HEAD
+        --backfill-base-ref - limit backfill to commits after merge-base with this ref (empty: auto primary)
+        --clear-branch-tags - clear tags that point at commits in the backfill range
         --apply             - disable dry run and do it for real
         --push              - push after applying
         --show              - show version tag (values: calendar, variant, revision)
