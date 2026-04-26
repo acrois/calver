@@ -2,7 +2,7 @@
 set -eo pipefail
 
 # =========
-# calver.sh
+# calver
 # =========
 # Description: Utility for automatically tagging git repositories using CalVer.
 # Author:      Aaron Croissette
@@ -12,6 +12,12 @@ FORMAT=
 DRY_RUN=true
 PUSH=false
 AUTO_VARIANT=false
+BACKFILL=false
+BACKFILL_DAYS=1
+BACKFILL_ALL=false
+BACKFILL_BASE_REF=
+BACKFILL_BASE_REF_SET=false
+CLEAR_BRANCH_TAGS=false
 FROM_DATE=
 VARIANT=
 REV=0
@@ -20,27 +26,77 @@ FULLVER=
 SEMIVER=
 VER=
 SHOW=
+IN_GIT=false
+GIT_SHA=
+BRANCH=
+
+declare -A NEXT_REV_BY_BASE
 
 tag() {
-    local SHA=$1
-    local TAG=$2
+    local SHA="$1"
+    local TAG="$2"
+    local TAG_SHA=
+
+    TAG_SHA="$(git rev-list -n 1 "$TAG" 2>/dev/null || true)"
+
+    if [ -n "$TAG_SHA" ] && [ "$TAG_SHA" = "$SHA" ]; then
+        echo "Tag $TAG already points at $SHA"
+        return 0
+    fi
+
+    if [ -n "$TAG_SHA" ]; then
+        echo "Tag $TAG already exists on $TAG_SHA, skipping"
+        return 0
+    fi
 
     if [ $DRY_RUN = false ]; then
-        git tag -d $TAG 2>/dev/null || true;
-
-        # if [[ $PUSH = true && $? -eq 0 ]]; then
-        #     git push origin :refs/tags/$TAG
-        # fi
-
-        git tag $TAG;
+        # Respect repository git config for signing/annotation behavior.
+        TAG_MESSAGE="CalVer tag $TAG for $SHA"
+        git tag "$TAG" "$SHA" -m "$TAG_MESSAGE"
 
         if [ $PUSH = true ]; then
             git push origin -f --tags
         fi
 
-        echo "Tagged $TAG"
+        echo "Tagged $TAG -> $SHA"
     else
-        echo "Tag $TAG"
+        echo "Tag $TAG -> $SHA"
+    fi
+}
+
+clear_tags_for_range() {
+    local RANGE="$1"
+    local TAG=
+    local TAG_SHA=
+    local SHA_IN_RANGE=
+    local CLEAR_COUNT=0
+
+    declare -A COMMITS_IN_RANGE
+    while IFS= read -r SHA_IN_RANGE; do
+        [ -n "$SHA_IN_RANGE" ] && COMMITS_IN_RANGE["$SHA_IN_RANGE"]=1
+    done < <(git rev-list "$RANGE")
+
+    while IFS= read -r TAG; do
+        [ -z "$TAG" ] && continue
+        TAG_SHA="$(git rev-list -n 1 "$TAG" 2>/dev/null || true)"
+        [ -z "$TAG_SHA" ] && continue
+
+        if [ -n "${COMMITS_IN_RANGE[$TAG_SHA]+x}" ]; then
+            CLEAR_COUNT=$((CLEAR_COUNT + 1))
+            if [ "$DRY_RUN" = true ]; then
+                echo "Clear tag $TAG (points at $TAG_SHA)"
+            else
+                git tag -d "$TAG" >/dev/null
+                if [ "$PUSH" = true ]; then
+                    git push origin ":refs/tags/$TAG" >/dev/null
+                fi
+                echo "Cleared tag $TAG (was $TAG_SHA)"
+            fi
+        fi
+    done < <(git tag -l)
+
+    if [ "$CLEAR_COUNT" -eq 0 ] && [ -z "$SHOW" ]; then
+        echo "No tags matched clear range."
     fi
 }
 
@@ -51,8 +107,8 @@ format_variant() {
     local REVISION=
 
     while [ "$1" != "" ]; do
-        PARAM=`echo $1 | awk -F= '{print $1}'`
-        VALUE=`echo $1 | awk -F= '{print $2}'`
+        PARAM="${1%%=*}"
+        VALUE="${1#*=}"
         case $PARAM in
             --o)
                 __resultvar=$VALUE
@@ -74,16 +130,16 @@ format_variant() {
         shift
     done
 
-    if [ ! -z $VARIANT ]; then
+    if [ -n "$VARIANT" ]; then
         myresult="$myresult-$VARIANT"
     fi
 
-    if [ ! -z $REVISION ]; then
+    if [ -n "$REVISION" ]; then
         myresult="$myresult.$REVISION"
     fi
 
     if [[ "$__resultvar" ]]; then
-        eval $__resultvar="'$myresult'"
+        eval "$__resultvar=\"\$myresult\""
     else
         echo "$myresult"
     fi
@@ -95,8 +151,8 @@ ver_for_date() {
     local FROM_DATE='now'
 
     while [ "$1" != "" ]; do
-        PARAM=`echo $1 | awk -F= '{print $1}'`
-        VALUE=`echo $1 | awk -F= '{print $2}'`
+        PARAM="${1%%=*}"
+        VALUE="${1#*=}"
         case $PARAM in
             --o)
                 __resultvar=$VALUE
@@ -117,17 +173,249 @@ ver_for_date() {
 
     local myresult=
 
-    if [ -z $FORMAT ]; then
+    if [ -z "$FORMAT" ]; then
         # Fix for zero-padding the %u (day of week)
-        myresult="'$(printf "%s.%02d" $(date +%Y.%V -d "$FROM_DATE") $(date +%u -d "$FROM_DATE"))'"
+        myresult="$(printf "%s.%02d" "$(date +%Y.%V -d "$FROM_DATE")" "$(date +%u -d "$FROM_DATE")")"
     else
-        myresult="'$(date +\"$FORMAT\" -d "$FROM_DATE")'"
+        myresult="$(date +"$FORMAT" -d "$FROM_DATE")"
     fi
 
     if [[ "$__resultvar" ]]; then
-        eval $__resultvar="'$myresult'"
+        eval "$__resultvar=\"\$myresult\""
     else
         echo "$myresult"
+    fi
+}
+
+is_git_repo() {
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
+commit_timestamp() {
+    local SHA="$1"
+    git show -s --format=%cI "$SHA"
+}
+
+current_branch() {
+    git branch --show-current 2>/dev/null || true
+}
+
+resolve_auto_variant() {
+    local BRANCH_NAME="$1"
+    if [[ "$BRANCH_NAME" =~ ^(trunk|main|master)$ ]]; then
+        echo -n ""
+    elif [ -z "$BRANCH_NAME" ]; then
+        echo -n "detached"
+    else
+        echo -n "$BRANCH_NAME"
+    fi
+}
+
+detect_primary_branch() {
+    local REMOTE_HEAD=
+    REMOTE_HEAD="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+    if [ -n "$REMOTE_HEAD" ]; then
+        echo "${REMOTE_HEAD#origin/}"
+        return 0
+    fi
+
+    for CANDIDATE in trunk main master; do
+        if git show-ref --verify --quiet "refs/heads/$CANDIDATE" || git show-ref --verify --quiet "refs/remotes/origin/$CANDIDATE"; then
+            echo "$CANDIDATE"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+extract_revision() {
+    local TAG="$1"
+    if [[ "$TAG" =~ \.([0-9]+)$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+    fi
+}
+
+revision_tag_for_commit() {
+    local BASE="$1"
+    local SHA="$2"
+    local TAG=
+    local TAG_SHA=
+
+    while IFS= read -r TAG; do
+        [ -z "$TAG" ] && continue
+        TAG_SHA="$(git rev-list -n 1 "$TAG" 2>/dev/null || true)"
+        if [ "$TAG_SHA" = "$SHA" ]; then
+            echo "$TAG"
+            return 0
+        fi
+    done < <(git tag -l --sort=version:refname "$BASE.*" 2>/dev/null)
+
+    return 1
+}
+
+next_revision_for_base() {
+    local BASE="$1"
+    local TAG=
+    local REVISION=
+    local MAX_REV=-1
+
+    if [ -n "${NEXT_REV_BY_BASE[$BASE]+x}" ]; then
+        echo "${NEXT_REV_BY_BASE[$BASE]}"
+        return 0
+    fi
+
+    while IFS= read -r TAG; do
+        [ -z "$TAG" ] && continue
+        REVISION="$(extract_revision "$TAG")"
+        if [ -n "$REVISION" ] && [ "$REVISION" -gt "$MAX_REV" ]; then
+            MAX_REV="$REVISION"
+        fi
+    done < <(git tag -l --sort=version:refname "$BASE.*" 2>/dev/null)
+
+    NEXT_REV_BY_BASE["$BASE"]="$((MAX_REV + 1))"
+    echo "${NEXT_REV_BY_BASE[$BASE]}"
+}
+
+reserve_next_revision() {
+    local BASE="$1"
+    local NEXT="$2"
+    NEXT_REV_BY_BASE["$BASE"]="$((NEXT + 1))"
+}
+
+build_version_for_commit() {
+    local SHA="$1"
+    local VERSION=
+    local BASE=
+    local FOUND_TAG=
+    local FOUND_REV=
+    local COMMIT_DATE=
+
+    COMMIT_DATE="$(commit_timestamp "$SHA")"
+    ver_for_date --o='VERSION' --fmt="$FORMAT" --d="$COMMIT_DATE"
+
+    if [ -n "$PREFIX" ]; then
+        VERSION="$PREFIX/$VERSION"
+    fi
+
+    if [ -n "$VARIANT" ]; then
+        format_variant --o='BASE' --i="$VERSION" --v="$VARIANT"
+    else
+        BASE="$VERSION"
+    fi
+
+    FOUND_TAG="$(revision_tag_for_commit "$BASE" "$SHA" || true)"
+    if [ -n "$FOUND_TAG" ]; then
+        FOUND_REV="$(extract_revision "$FOUND_TAG")"
+        if [ -n "$FOUND_REV" ]; then
+            REV="$FOUND_REV"
+            reserve_next_revision "$BASE" "$REV"
+        fi
+    else
+        REV="$(next_revision_for_base "$BASE")"
+        reserve_next_revision "$BASE" "$REV"
+    fi
+
+    format_variant --o='FULLVER' --i="$VERSION" --v="$VARIANT" --r="$REV"
+    VER="$VERSION"
+    SEMIVER="${BASE:-$VERSION}"
+}
+
+tag_commit() {
+    local SHA="$1"
+    local BASE="$2"
+    local REVISION_TAG="$3"
+
+    tag "$SHA" "$BASE"
+    tag "$SHA" "$REVISION_TAG"
+}
+
+process_backfill() {
+    local HEAD_SHA="$1"
+    local HEAD_TS=
+    local SINCE_TS=
+    local RANGE=
+    local BASE_SHA=
+    local EFFECTIVE_BASE_REF=
+    local SHA=
+    local FOUND=0
+
+    RANGE="$HEAD_SHA"
+    EFFECTIVE_BASE_REF="$BACKFILL_BASE_REF"
+    if [ "$BACKFILL_BASE_REF_SET" = true ] && [ -z "$EFFECTIVE_BASE_REF" ]; then
+        EFFECTIVE_BASE_REF="$(detect_primary_branch || true)"
+        if [ -z "$EFFECTIVE_BASE_REF" ]; then
+            echo "Backfill base ref was set empty, but primary branch could not be detected."
+            exit 1
+        fi
+        if [ -z "$SHOW" ]; then
+            echo "Backfill base ref was empty; defaulting to primary branch $EFFECTIVE_BASE_REF"
+        fi
+    fi
+
+    if [ -n "$EFFECTIVE_BASE_REF" ]; then
+        if ! git rev-parse --verify "$EFFECTIVE_BASE_REF" >/dev/null 2>&1; then
+            echo "Backfill base ref '$EFFECTIVE_BASE_REF' was not found."
+            exit 1
+        fi
+        BASE_SHA="$(git merge-base "$HEAD_SHA" "$EFFECTIVE_BASE_REF" 2>/dev/null || true)"
+        if [ -n "$BASE_SHA" ]; then
+            RANGE="$BASE_SHA..$HEAD_SHA"
+            if [ -z "$SHOW" ]; then
+                echo "Backfill limited to commits after branch point $BASE_SHA against $EFFECTIVE_BASE_REF"
+            fi
+        fi
+    fi
+
+    if [ "$CLEAR_BRANCH_TAGS" = true ]; then
+        if [ -z "$SHOW" ]; then
+            echo "Clearing tags for range $RANGE"
+        fi
+        clear_tags_for_range "$RANGE"
+    fi
+
+    if [ "$BACKFILL_ALL" = true ]; then
+        if [ -z "$SHOW" ]; then
+            echo "Backfilling entire commit history from $HEAD_SHA"
+        fi
+        while IFS= read -r SHA; do
+            [ -z "$SHA" ] && continue
+            FOUND=1
+            build_version_for_commit "$SHA"
+            if [ -z "$SHOW" ]; then
+                echo "Commit: $SHA"
+                echo "Calendar: $VER"
+                [ -n "$VARIANT" ] && echo "Variant: $SEMIVER"
+                echo "Revision: $FULLVER"
+            fi
+            tag_commit "$SHA" "${SEMIVER:-$VER}" "$FULLVER"
+        done < <(git rev-list --reverse "$RANGE")
+    else
+        HEAD_TS="$(commit_timestamp "$HEAD_SHA")"
+        SINCE_TS="$(date -d "$HEAD_TS -$BACKFILL_DAYS day" --iso-8601=seconds)"
+
+        if [ -z "$SHOW" ]; then
+            echo "Backfilling commits since $SINCE_TS"
+        fi
+
+        while IFS= read -r SHA; do
+            [ -z "$SHA" ] && continue
+            FOUND=1
+            build_version_for_commit "$SHA"
+            if [ -z "$SHOW" ]; then
+                echo "Commit: $SHA"
+                echo "Calendar: $VER"
+                [ -n "$VARIANT" ] && echo "Variant: $SEMIVER"
+                echo "Revision: $FULLVER"
+            fi
+            tag_commit "$SHA" "${SEMIVER:-$VER}" "$FULLVER"
+        done < <(git rev-list --reverse --since="$SINCE_TS" "$RANGE")
+    fi
+
+    if [ "$FOUND" -eq 0 ]; then
+        # Fallback for edge cases where rev-list returns no commits.
+        build_version_for_commit "$HEAD_SHA"
+        tag_commit "$HEAD_SHA" "${SEMIVER:-$VER}" "$FULLVER"
     fi
 }
 
@@ -160,6 +448,11 @@ usage() {
         "\t--variant           - adds a variant tag e.g $LESSVER\n" \
         "\t--revision          - adds a revision incrementer after the variant e.g $FULLVER\n" \
         "\t--prefix            - adds a prefix in front of the version e.g node/$FULLVER\n" \
+        "\t--backfill          - tags untagged commits from at least one day before HEAD\n" \
+        "\t--backfill-days     - days to backfill from HEAD commit timestamp (default: 1)\n" \
+        "\t--backfill-all      - backfills tags for the entire reachable history from HEAD\n" \
+        "\t--backfill-base-ref - limit backfill to commits after merge-base with this ref (empty: auto primary)\n" \
+        "\t--clear-branch-tags - clear tags that point at commits in the backfill range\n" \
         "\t--apply             - disable dry run and do it for real\n" \
         "\t--push              - push after applying\n" \
         "\t--show              - show version tag (values: calendar, variant, revision)\n" \
@@ -169,8 +462,8 @@ usage() {
 }
 
 while [ "$1" != "" ]; do
-    PARAM=`echo $1 | awk -F= '{print $1}'`
-    VALUE=`echo $1 | awk -F= '{print $2}'`
+    PARAM="${1%%=*}"
+    VALUE="${1#*=}"
     case $PARAM in
         --version)
             VER=$VALUE
@@ -186,6 +479,24 @@ while [ "$1" != "" ]; do
             ;;
         --revision)
             REV=$VALUE
+            ;;
+        --backfill)
+            BACKFILL=true
+            ;;
+        --backfill-days)
+            BACKFILL=true
+            BACKFILL_DAYS=$VALUE
+            ;;
+        --backfill-all)
+            BACKFILL=true
+            BACKFILL_ALL=true
+            ;;
+        --backfill-base-ref)
+            BACKFILL_BASE_REF_SET=true
+            BACKFILL_BASE_REF=$VALUE
+            ;;
+        --clear-branch-tags)
+            CLEAR_BRANCH_TAGS=true
             ;;
         --apply)
             DRY_RUN=false
@@ -225,128 +536,147 @@ _is_sourced() {
 }
 
 _main() {
-    if [ -z $VER ]; then
-        ver_for_date --o='VER' --fmt=$FORMAT --d=$FROM_DATE
+    local RESOLVED_DATE="$FROM_DATE"
+    local VARLOOK=
+    local CURR_TAG=
+    local CURR_TAG_SHA=
+    local CURR_REV=
+
+    if is_git_repo; then
+        IN_GIT=true
     fi
 
-    if [ ! -z $PREFIX ]; then
+    if [ "$IN_GIT" = false ]; then
+        if [ "$AUTO_VARIANT" = true ]; then
+            VARIANT='detached'
+        fi
+        if [ -z "$VER" ]; then
+            ver_for_date --o='VER' --fmt="$FORMAT" --d="$RESOLVED_DATE"
+        fi
+        if [ -n "$VARIANT" ]; then
+            format_variant --o='SEMIVER' --i="$VER" --v="$VARIANT"
+        fi
+        format_variant --o='FULLVER' --i="$VER" --v="$VARIANT" --r="$REV"
+        case $SHOW in
+            'calendar') echo -n "$VER"; exit ;;
+            'variant') echo -n "${SEMIVER:-$VER}"; exit ;;
+            'revision') echo -n "$FULLVER"; exit ;;
+        esac
+        echo "Not in a git repository. Use --show, --date, or --version for non-git usage."
+        exit 1
+    fi
+
+    if [ -z "$SHOW" ]; then
+        echo "Fetching metadata from git origin..."
+    fi
+    git fetch --all --tags 2>/dev/null || true
+    GIT_SHA="$(git rev-parse HEAD)"
+    BRANCH="$(current_branch)"
+
+    if [ "$AUTO_VARIANT" = true ]; then
+        VARIANT="$(resolve_auto_variant "$BRANCH")"
+    fi
+
+    if [ -z "$VER" ]; then
+        if [ -z "$RESOLVED_DATE" ]; then
+            RESOLVED_DATE="$(commit_timestamp "$GIT_SHA")"
+        fi
+        ver_for_date --o='VER' --fmt="$FORMAT" --d="$RESOLVED_DATE"
+    fi
+
+    if [ -n "$PREFIX" ]; then
         VER="$PREFIX/$VER"
     fi
 
-    if [ -z $VER ]; then
+    if [ -z "$VER" ]; then
         echo "No version detected, aborting."
         exit 1
     fi
 
-    if [ -z $SHOW ]; then
-        echo "Fetching metadata from git origin..."
-    fi
-
-    FETCH=`git fetch --all 2>/dev/null`
-    GIT_SHA=`git rev-parse HEAD`
-    BRANCH=`git branch --show-current`
-
-    if [ -z $SHOW ]; then
+    if [ -z "$SHOW" ]; then
         echo "SHA: $GIT_SHA"
         echo "Branch: $BRANCH"
     fi
 
-    if [ $AUTO_VARIANT = true ]; then
-        vspec=false
-
-        if [[ -z $SHOW && ! -z $VARIANT ]]; then
-            echo "Variant specified: $VARIANT"
-            vspec=true
-        fi
-
-        if [[ "$BRANCH" =~ ^(trunk|main|master)$ ]]; then
-            VARIANT=;
-        elif [ -z $BRANCH ]; then
-            VARIANT='detached'
-        else
-            VARIANT=$BRANCH;
-        fi
-
-        if [[ -z $SHOW && ! -z $VARIANT ]]; then
-            echo "Variant set: $VARIANT"
-        elif [[ -z $SHOW && $vspec = true ]]; then
-            echo "Variant cleared"
-        fi
-    fi
-
-    if [ -z $SHOW ]; then
+    if [ -z "$SHOW" ]; then
         echo "Calendar: $VER"
+        if [ -n "$VARIANT" ]; then
+            echo "Variant set: $VARIANT"
+        fi
     fi
 
-    if [ ! -z $VARIANT ]; then
-        format_variant --o='SEMIVER' --i=$VER --v=$VARIANT
-
-        if [ -z $SHOW ]; then
+    if [ -n "$VARIANT" ]; then
+        format_variant --o='SEMIVER' --i="$VER" --v="$VARIANT"
+        if [ -z "$SHOW" ]; then
             echo "Variant: $SEMIVER"
         fi
     fi
 
     VARLOOK=${SEMIVER:-$VER}
-    CURR_TAG=`git tag -l --sort=-version:refname "$VARLOOK.*" | head -n 1 2>/dev/null`;
-    # VARTAGS=`git tag -l --sort=refname "$VARLOOK*"`
+    CURR_TAG="$(git tag -l --sort=-version:refname "$VARLOOK.*" | head -n 1 2>/dev/null)"
 
-    if [ ! -z $CURR_TAG ]; then
-        CURR_TAG_SHA=`git rev-list -n 1 $CURR_TAG`
-        OLD_IFS=$IFS
-        IFS='.'
-        read -a CURR_TAG_PARTS <<< "$CURR_TAG"
-        IFS=$OLD_IFS
-        CURR_REV=${CURR_TAG_PARTS[3]}
+    if [ -n "$CURR_TAG" ]; then
+        CURR_TAG_SHA="$(git rev-list -n 1 "$CURR_TAG")"
+        CURR_REV="$(extract_revision "$CURR_TAG")"
+
+        if [ -z "$CURR_REV" ]; then
+            CURR_REV=0
+        fi
 
         if [[ "$GIT_SHA" != "$CURR_TAG_SHA" ]]; then
             REV="$((CURR_REV + 1))"
 
-            if [ -z $SHOW ]; then
+            if [ -z "$SHOW" ]; then
                 echo "Existing revision $CURR_REV, incrementing ours to $REV"
             fi
-        elif [ -z $SHOW ]; then
+        elif [ -z "$SHOW" ]; then
             REV="$((CURR_REV + 0))"
             echo "Existing tag $CURR_TAG is our commit, using $REV"
         fi
     fi
 
-    format_variant --o='FULLVER' --i=$VER --v=$VARIANT --r=$REV
+    format_variant --o='FULLVER' --i="$VER" --v="$VARIANT" --r="$REV"
 
-    if [ -z $SHOW ]; then
+    if [ -z "$SHOW" ]; then
         echo "Revision: $FULLVER"
     fi
 
     case $SHOW in
         'calendar')
-            echo -n $VER
+            echo -n "$VER"
             exit
             ;;
         'variant')
-            echo -n $SEMIVER
+            echo -n "${SEMIVER:-$VER}"
             exit
             ;;
         'revision')
-            echo -n $FULLVER
+            echo -n "$FULLVER"
             exit
             ;;
         *)  ;;
     esac
 
-    if [ $DRY_RUN = true ]; then
+    if [ "$BACKFILL" = true ]; then
+        process_backfill "$GIT_SHA"
+        exit 0
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
         echo "================================="
         echo "DRY RUN - NOTHING WILL BE CHANGED"
         echo "================================="
     fi
 
     # You are either tagging a variant or the main version
-    if [ -z $SEMIVER ]; then
-        tag $GIT_SHA $VER
+    if [ -z "$SEMIVER" ]; then
+        tag "$GIT_SHA" "$VER"
     else
-        tag $GIT_SHA $SEMIVER
+        tag "$GIT_SHA" "$SEMIVER"
     fi
 
     # You are always tagging a revision
-    tag $GIT_SHA $FULLVER
+    tag "$GIT_SHA" "$FULLVER"
 }
 
 # If we are sourced from elsewhere, don't perform any further actions

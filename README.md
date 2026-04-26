@@ -4,7 +4,7 @@
 
 Give each commit in your repo a version.
 
-[calver.sh](./calver.sh) - Utility for automatically tagging git repositories using [CalVer](https://calver.org/).
+[`calver`](./calver) - Utility for automatically tagging git repositories using [CalVer](https://calver.org/).
 
 ## GitHub Actions Usage
 
@@ -18,8 +18,8 @@ on:
   push:
     branches:
       - "**"
-    tags:
-      - "!**"
+    tags-ignore:
+      - "**"
 concurrency: tag-scripts
 jobs:
   apply:
@@ -30,6 +30,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          fetch-tags: true
       - name: Version
         uses: acrois/calver@trunk
 ```
@@ -114,7 +115,7 @@ jobs:
 ## Docker Usage
 
 ```sh
-docker run --rm -v "$PWD:/run" ghcr.io/acrois/scripts calver.sh --help
+docker run --rm -v "$PWD:/run" ghcr.io/acrois/scripts calver --help
 ```
 
 ## CLI Install
@@ -122,17 +123,17 @@ docker run --rm -v "$PWD:/run" ghcr.io/acrois/scripts calver.sh --help
 Simply run the following:
 
 ```sh
-sudo curl -o /usr/local/bin/calver.sh https://raw.githubusercontent.com/acrois/calver/HEAD/calver.sh
-sudo chmod +x /usr/local/bin/calver.sh
+sudo curl -o /usr/local/bin/calver https://raw.githubusercontent.com/acrois/calver/HEAD/calver
+sudo chmod +x /usr/local/bin/calver
 ```
 
 ## CLI Usage
 
-[//]: # (using calver.sh)
+[//]: # (using calver)
 ```
 Usage:
-        calver.sh --version="2023.19.03" --variant="dev" --revision="10"
-        calver.sh --date="2023-05-10" --variant="dev" --revision="10"
+        calver --version="2023.19.03" --variant="dev" --revision="10"
+        calver --date="2023-05-10" --variant="dev" --revision="10"
 
 Output tags:
         Revision:  2023.19.03-dev.10
@@ -149,10 +150,12 @@ Flags:
         --variant           - adds a variant tag e.g
         --revision          - adds a revision incrementer after the variant e.g 2023.19.03-dev.10
         --prefix            - adds a prefix in front of the version e.g node/2023.19.03-dev.10
+        --backfill          - tags untagged commits from at least one day before HEAD
+        --backfill-days     - days to backfill from HEAD commit timestamp (default: 1)
         --apply             - disable dry run and do it for real
         --push              - push after applying
         --show              - show version tag (values: calendar, variant, revision)
         --v                 - verbose output (`set -x`)
         --help              - prints this useful information
 ```
-[//]: # (used calver.sh)
+[//]: # (used calver)
