@@ -229,6 +229,26 @@ detect_primary_branch() {
     return 1
 }
 
+resolve_ref_for_backfill() {
+    local INPUT_REF="$1"
+    if git rev-parse --verify "$INPUT_REF" >/dev/null 2>&1; then
+        echo "$INPUT_REF"
+        return 0
+    fi
+
+    if git rev-parse --verify "origin/$INPUT_REF" >/dev/null 2>&1; then
+        echo "origin/$INPUT_REF"
+        return 0
+    fi
+
+    if git rev-parse --verify "refs/remotes/origin/$INPUT_REF" >/dev/null 2>&1; then
+        echo "refs/remotes/origin/$INPUT_REF"
+        return 0
+    fi
+
+    return 1
+}
+
 extract_revision() {
     local TAG="$1"
     if [[ "$TAG" =~ \.([0-9]+)$ ]]; then
@@ -337,6 +357,7 @@ process_backfill() {
     local RANGE=
     local BASE_SHA=
     local EFFECTIVE_BASE_REF=
+    local RESOLVED_BASE_REF=
     local SHA=
     local FOUND=0
 
@@ -354,15 +375,16 @@ process_backfill() {
     fi
 
     if [ -n "$EFFECTIVE_BASE_REF" ]; then
-        if ! git rev-parse --verify "$EFFECTIVE_BASE_REF" >/dev/null 2>&1; then
+        RESOLVED_BASE_REF="$(resolve_ref_for_backfill "$EFFECTIVE_BASE_REF" || true)"
+        if [ -z "$RESOLVED_BASE_REF" ]; then
             echo "Backfill base ref '$EFFECTIVE_BASE_REF' was not found."
             exit 1
         fi
-        BASE_SHA="$(git merge-base "$HEAD_SHA" "$EFFECTIVE_BASE_REF" 2>/dev/null || true)"
+        BASE_SHA="$(git merge-base "$HEAD_SHA" "$RESOLVED_BASE_REF" 2>/dev/null || true)"
         if [ -n "$BASE_SHA" ]; then
             RANGE="$BASE_SHA..$HEAD_SHA"
             if [ -z "$SHOW" ]; then
-                echo "Backfill limited to commits after branch point $BASE_SHA against $EFFECTIVE_BASE_REF"
+                echo "Backfill limited to commits after branch point $BASE_SHA against $RESOLVED_BASE_REF"
             fi
         fi
     fi
