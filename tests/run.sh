@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CALVER="$ROOT_DIR/calver"
+LEGACY_TESTS="$ROOT_DIR/tests/legacy-compat.sh"
 
 fail() {
     echo "FAIL: $*" >&2
@@ -324,6 +325,7 @@ main() {
     test_backfill_empty_base_ref_defaults_to_primary_branch
     test_non_git_show_calendar_still_works
     test_clear_branch_tags_flag_removes_branch_tags
+    "$LEGACY_TESTS"
     echo "All tests passed."
 }
 

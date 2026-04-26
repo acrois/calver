@@ -163,3 +163,11 @@ Flags:
         --help              - prints this useful information
 ```
 [//]: # (used calver)
+
+## Compatibility And Rollout
+
+- Existing command forms remain supported; newer behavior is opt-in via backfill flags.
+- Legacy-safe invocations such as `--auto`, `--auto --apply`, `--date=... --show=revision`, and `--version=... --show=revision` are covered by `tests/legacy-compat.sh`.
+- Full regression coverage (including legacy checks) runs via `tests/run.sh`.
+- For production rollout, run without `--apply --push` first to inspect output, then rerun with apply/push enabled.
+- For one-time branch-only bootstrap, prefer `--backfill-all --backfill-base-ref= --clear-branch-tags` to avoid touching older trunk history.
