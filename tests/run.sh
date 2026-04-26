@@ -110,6 +110,28 @@ test_backfill_rerun_is_stable() {
     rm -rf "$repo"
 }
 
+test_base_tag_tracks_latest_commit() {
+    local repo first_sha second_sha base_tag
+    repo="$(new_repo)"
+    first_sha="$(create_commit "$repo" "2026-04-24T10:00:00Z" "a")"
+    second_sha="$(create_commit "$repo" "2026-04-24T14:00:00Z" "b")"
+
+    (
+        cd "$repo"
+        "$CALVER" --backfill-all --apply >/dev/null
+        base_tag="$(git tag -l "2026.17.05")"
+        base_tag_sha="$(git rev-list -n 1 "$base_tag")"
+        assert_eq "$second_sha" "$base_tag_sha" "base tag should move to latest commit"
+
+        first_rev_sha="$(git rev-list -n 1 "2026.17.05.0")"
+        second_rev_sha="$(git rev-list -n 1 "2026.17.05.1")"
+        assert_eq "$first_sha" "$first_rev_sha" "revision .0 should stay on first commit"
+        assert_eq "$second_sha" "$second_rev_sha" "revision .1 should point to second commit"
+    )
+
+    rm -rf "$repo"
+}
+
 test_backfill_all_tags_entire_history() {
     local repo first_sha second_sha third_sha
     repo="$(new_repo)"
@@ -230,6 +252,7 @@ main() {
     test_git_default_uses_head_timestamp
     test_backfill_tags_recent_commits
     test_backfill_rerun_is_stable
+    test_base_tag_tracks_latest_commit
     test_backfill_all_tags_entire_history
     test_backfill_base_ref_limits_to_branch_commits
     test_backfill_empty_base_ref_defaults_to_primary_branch

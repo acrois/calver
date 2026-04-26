@@ -35,6 +35,7 @@ declare -A NEXT_REV_BY_BASE
 tag() {
     local SHA="$1"
     local TAG="$2"
+    local ALLOW_MOVE="${3:-false}"
     local TAG_SHA=
 
     TAG_SHA="$(git rev-list -n 1 "$TAG" 2>/dev/null || true)"
@@ -45,6 +46,19 @@ tag() {
     fi
 
     if [ -n "$TAG_SHA" ]; then
+        if [ "$ALLOW_MOVE" = true ]; then
+            if [ "$DRY_RUN" = true ]; then
+                echo "Move tag $TAG from $TAG_SHA to $SHA"
+                return 0
+            fi
+
+            git tag -f "$TAG" "$SHA"
+            if [ $PUSH = true ]; then
+                git push origin -f --tags
+            fi
+            echo "Moved $TAG -> $SHA (was $TAG_SHA)"
+            return 0
+        fi
         echo "Tag $TAG already exists on $TAG_SHA, skipping"
         return 0
     fi
@@ -346,8 +360,10 @@ tag_commit() {
     local BASE="$2"
     local REVISION_TAG="$3"
 
-    tag "$SHA" "$BASE"
-    tag "$SHA" "$REVISION_TAG"
+    # Base tag should follow the newest commit for this calendar/variant stream.
+    tag "$SHA" "$BASE" true
+    # Revision tags are immutable once assigned.
+    tag "$SHA" "$REVISION_TAG" false
 }
 
 process_backfill() {
