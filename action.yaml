@@ -93,6 +93,24 @@ runs:
           [[ "$CALVER_HELP" == *"$flag"* ]]
         }
 
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          echo "[calver-action] action repository: $ACTION_REPO"
+          echo "[calver-action] action ref: $ACTION_REF"
+          echo "[calver-action] input snapshot:"
+          echo "  auto=${{ inputs.auto }} backfill=${{ inputs.backfill }} backfill-days=${{ inputs['backfill-days'] }}"
+          echo "  backfill-all=${{ inputs['backfill-all'] }} backfill-base-ref=${{ inputs['backfill-base-ref'] }}"
+          echo "  clear-branch-tags=${{ inputs['clear-branch-tags'] }} apply=${{ inputs.apply }} push=${{ inputs.push }}"
+          echo "  show=${{ inputs.show }} help=${{ inputs.help }}"
+          echo "[calver-action] supported optional flags from downloaded calver:"
+          for opt in --backfill --backfill-days --backfill-all --backfill-base-ref --clear-branch-tags; do
+            if supports_flag "$opt"; then
+              echo "  $opt: yes"
+            else
+              echo "  $opt: no"
+            fi
+          done
+        fi
+
         if [ -n "${{ inputs.version }}" ]; then ARGS+=("--version=${{ inputs.version }}"); fi
         if [ -n "${{ inputs.prefix }}" ]; then ARGS+=("--prefix=${{ inputs.prefix }}"); fi
         if [ -n "${{ inputs.format }}" ]; then ARGS+=("--format=${{ inputs.format }}"); fi
@@ -110,5 +128,17 @@ runs:
         if [ -n "${{ inputs.show }}" ]; then ARGS+=("--show=${{ inputs.show }}"); fi
         if [ "${{ inputs.verbose }}" = "true" ]; then ARGS+=("--v"); fi
         if [ "${{ inputs.help }}" = "true" ]; then ARGS+=("--help"); fi
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          if [ "${#ARGS[@]}" -eq 0 ]; then
+            echo "[calver-action] computed calver args: (none)"
+          else
+            printf '[calver-action] computed calver args:'
+            for arg in "${ARGS[@]}"; do
+              printf ' %q' "$arg"
+            done
+            printf '\n'
+          fi
+        fi
 
         calver "${ARGS[@]}"
