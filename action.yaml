@@ -79,7 +79,9 @@ runs:
     - name: Version
       shell: bash
       run: |
-        sudo curl -s -o /usr/local/bin/calver https://raw.githubusercontent.com/acrois/calver/HEAD/calver
+        ACTION_REPO="${GITHUB_ACTION_REPOSITORY:-acrois/calver}"
+        ACTION_REF="${GITHUB_ACTION_REF:-HEAD}"
+        sudo curl -s -o /usr/local/bin/calver "https://raw.githubusercontent.com/${ACTION_REPO}/${ACTION_REF}/calver"
         sudo chmod +x /usr/local/bin/calver
         ARGS=()
 

@@ -1,10 +1,10 @@
 # calver
 
-[![Build Image](https://github.com/acrois/scripts/actions/workflows/build.yaml/badge.svg)](https://github.com/acrois/scripts/actions/workflows/build.yaml)
+[Build Image](https://github.com/acrois/scripts/actions/workflows/build.yaml)
 
 Give each commit in your repo a version.
 
-[`calver`](./calver) - Utility for automatically tagging git repositories using [CalVer](https://calver.org/).
+`[calver](./calver)` - Utility for automatically tagging git repositories using [CalVer](https://calver.org/).
 
 ## GitHub Actions Usage
 
@@ -43,30 +43,32 @@ Defaults are intentionally backwards compatible with `origin/trunk`, so calling 
 calver --auto --apply --push
 ```
 
-| Input | Default | Notes |
-|---|---|---|
-| `version` | `""` | Explicit calendar version to release |
-| `prefix` | `""` | Prefix prepended to generated tags |
-| `format` | `""` | Custom date format |
-| `date` | `""` | Date to base version on |
-| `revision` | `""` | Explicit revision override |
-| `variant` | `""` | Explicit variant override |
-| `auto` | `"true"` | Enable branch-based variant auto-selection |
-| `backfill` | `"false"` | Backfill recent untagged commits |
-| `backfill-days` | `""` | Days to backfill from HEAD commit timestamp |
-| `backfill-all` | `"false"` | Backfill full reachable history |
-| `backfill-base-ref` | `"__unset__"` | Limit backfill to merge-base range; only passed when explicitly set |
-| `clear-branch-tags` | `"false"` | Clear tags in the selected backfill range first |
-| `apply` | `"true"` | Disable dry-run and apply tags |
-| `push` | `"true"` | Push tags to origin |
-| `show` | `""` | Show one value and exit (`calendar`, `variant`, `revision`) |
-| `verbose` | `"false"` | Enable shell trace mode (`--v`) |
-| `help` | `"false"` | Print CLI help and exit |
 
-<details>
-<summary>Wait for the completion of the workflow (example)</summary>
+| Input               | Default       | Notes                                                               |
+| ------------------- | ------------- | ------------------------------------------------------------------- |
+| `version`           | `""`          | Explicit calendar version to release                                |
+| `prefix`            | `""`          | Prefix prepended to generated tags                                  |
+| `format`            | `""`          | Custom date format                                                  |
+| `date`              | `""`          | Date to base version on                                             |
+| `revision`          | `""`          | Explicit revision override                                          |
+| `variant`           | `""`          | Explicit variant override                                           |
+| `auto`              | `"true"`      | Enable branch-based variant auto-selection                          |
+| `backfill`          | `"false"`     | Backfill recent untagged commits                                    |
+| `backfill-days`     | `""`          | Days to backfill from HEAD commit timestamp                         |
+| `backfill-all`      | `"false"`     | Backfill full reachable history                                     |
+| `backfill-base-ref` | `"__unset__"` | Limit backfill to merge-base range; only passed when explicitly set |
+| `clear-branch-tags` | `"false"`     | Clear tags in the selected backfill range first                     |
+| `apply`             | `"true"`      | Disable dry-run and apply tags                                      |
+| `push`              | `"true"`      | Push tags to origin                                                 |
+| `show`              | `""`          | Show one value and exit (`calendar`, `variant`, `revision`)         |
+| `verbose`           | `"false"`     | Enable shell trace mode (`--v`)                                     |
+| `help`              | `"false"`     | Print CLI help and exit                                             |
+
+
+Wait for the completion of the workflow (example)
 
 ### Build Workflow
+
 Save to `.github/workflows/build.yaml` ([raw](./build.example.yaml))
 
 ```yaml
@@ -139,7 +141,8 @@ jobs:
           # ./build.sh --version ${{ matrix.version }}
           # ./release.sh --version ${{ matrix.version }}
 ```
-</details>
+
+
 
 ## Docker Usage
 
@@ -158,7 +161,6 @@ sudo chmod +x /usr/local/bin/calver
 
 ## CLI Usage
 
-[//]: # (using calver)
 ```
 Usage:
         calver --version="2023.19.03" --variant="dev" --revision="10"
@@ -190,7 +192,6 @@ Flags:
         --v                 - verbose output (`set -x`)
         --help              - prints this useful information
 ```
-[//]: # (used calver)
 
 ## Compatibility And Rollout
 
@@ -199,3 +200,4 @@ Flags:
 - Full regression coverage (including legacy checks) runs via `tests/run.sh`.
 - For production rollout, run without `--apply --push` first to inspect output, then rerun with apply/push enabled.
 - For one-time branch-only bootstrap, prefer `--backfill-all --backfill-base-ref= --clear-branch-tags` to avoid touching older trunk history.
+
