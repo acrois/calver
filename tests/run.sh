@@ -213,9 +213,12 @@ test_backfill_pushes_tags_once() {
     )
 
     push_count="$(wc -l < "$push_log" | tr -d ' ')"
-    assert_eq "1" "$push_count" "backfill should push all tags once"
+    assert_eq "1" "$push_count" "backfill should push touched tags once"
     push_command="$(<"$push_log")"
-    assert_eq "push origin -f --tags" "$push_command" "backfill should use one full tag push"
+    assert_match "$push_command" '^push origin .*refs/tags/' "backfill should push explicit tag refs"
+    if [[ "$push_command" == *"--tags"* ]]; then
+        fail "backfill should not use --tags blanket push"
+    fi
 
     rm -rf "$repo" "$git_wrapper_dir"
 }

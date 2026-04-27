@@ -33,21 +33,55 @@ GIT_SHA=
 BRANCH=
 
 declare -A NEXT_REV_BY_BASE
+declare -A TAG_PUSH_SPEC_BY_TAG
 
-push_tags() {
-    if [ "$PUSH" = true ]; then
-        if [ "$DEFER_TAG_PUSH" = true ]; then
-            TAG_PUSH_NEEDED=true
-        else
-            git push origin -f --tags
-        fi
+queue_tag_push() {
+    local TAG="$1"
+    local FORCE_PUSH_TAG="${2:-false}"
+    TAG_PUSH_SPEC_BY_TAG["$TAG"]="$FORCE_PUSH_TAG"
+    TAG_PUSH_NEEDED=true
+}
+
+flush_tag_push_queue() {
+    local TAG=
+    local SPEC=
+    local PUSH_ARGS=()
+
+    if [ "$PUSH" != true ] || [ "$TAG_PUSH_NEEDED" != true ]; then
+        return 0
     fi
+
+    for TAG in "${!TAG_PUSH_SPEC_BY_TAG[@]}"; do
+        SPEC="${TAG_PUSH_SPEC_BY_TAG[$TAG]}"
+        if [ "$SPEC" = true ]; then
+            PUSH_ARGS+=("+refs/tags/$TAG:refs/tags/$TAG")
+        else
+            PUSH_ARGS+=("refs/tags/$TAG:refs/tags/$TAG")
+        fi
+    done
+
+    if [ "${#PUSH_ARGS[@]}" -gt 0 ]; then
+        git push origin "${PUSH_ARGS[@]}"
+    fi
+
+    TAG_PUSH_NEEDED=false
+    unset TAG_PUSH_SPEC_BY_TAG
+    declare -gA TAG_PUSH_SPEC_BY_TAG
 }
 
 flush_deferred_tag_push() {
-    if [ "$PUSH" = true ] && [ "$TAG_PUSH_NEEDED" = true ]; then
-        git push origin -f --tags
-        TAG_PUSH_NEEDED=false
+    flush_tag_push_queue
+}
+
+push_tag() {
+    local TAG="$1"
+    local FORCE_PUSH_TAG="${2:-false}"
+
+    if [ "$PUSH" = true ]; then
+        queue_tag_push "$TAG" "$FORCE_PUSH_TAG"
+        if [ "$DEFER_TAG_PUSH" = false ]; then
+            flush_tag_push_queue
+        fi
     fi
 }
 
@@ -73,7 +107,7 @@ tag() {
             fi
 
             git tag -f "$TAG" "$SHA" -m "$TAG_MESSAGE"
-            push_tags
+            push_tag "$TAG" true
             echo "Moved $TAG -> $SHA (was $TAG_SHA)"
             return 0
         fi
@@ -85,7 +119,7 @@ tag() {
         # Respect repository git config for signing/annotation behavior.
         git tag "$TAG" "$SHA" -m "$TAG_MESSAGE"
 
-        push_tags
+        push_tag "$TAG" false
 
         echo "Tagged $TAG -> $SHA"
     else
