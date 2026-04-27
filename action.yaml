@@ -79,14 +79,10 @@ runs:
     - name: Version
       shell: bash
       run: |
-        ACTION_REPO="${GITHUB_ACTION_REPOSITORY:-acrois/calver}"
-        ACTION_REF="${GITHUB_ACTION_REF:-HEAD}"
-        ACTION_REF="${ACTION_REF#refs/tags/}"
-        ACTION_REF="${ACTION_REF#refs/heads/}"
-        sudo curl -fsSL -o /usr/local/bin/calver "https://raw.githubusercontent.com/${ACTION_REPO}/${ACTION_REF}/calver"
-        sudo chmod +x /usr/local/bin/calver
+        CALVER_BIN="${GITHUB_ACTION_PATH}/calver"
+        chmod +x "$CALVER_BIN"
         ARGS=()
-        CALVER_HELP="$(calver --help 2>&1 || true)"
+        CALVER_HELP="$("$CALVER_BIN" --help 2>&1 || true)"
 
         supports_flag() {
           local flag="$1"
@@ -94,8 +90,8 @@ runs:
         }
 
         if [ "${{ inputs.verbose }}" = "true" ]; then
-          echo "[calver-action] action repository: $ACTION_REPO"
-          echo "[calver-action] action ref: $ACTION_REF"
+          echo "[calver-action] action path: ${GITHUB_ACTION_PATH}"
+          echo "[calver-action] calver path: $CALVER_BIN"
           echo "[calver-action] input snapshot:"
           echo "  auto=${{ inputs.auto }} backfill=${{ inputs.backfill }} backfill-days=${{ inputs['backfill-days'] }}"
           echo "  backfill-all=${{ inputs['backfill-all'] }} backfill-base-ref=${{ inputs['backfill-base-ref'] }}"
@@ -141,4 +137,4 @@ runs:
           fi
         fi
 
-        calver "${ARGS[@]}"
+        "$CALVER_BIN" "${ARGS[@]}"
