@@ -35,6 +35,34 @@ jobs:
         uses: acrois/calver@trunk
 ```
 
+### Action Inputs
+
+Defaults are intentionally backwards compatible with `origin/trunk`, so calling the action with no inputs behaves like:
+
+```sh
+calver --auto --apply --push
+```
+
+| Input | Default | Notes |
+|---|---|---|
+| `version` | `""` | Explicit calendar version to release |
+| `prefix` | `""` | Prefix prepended to generated tags |
+| `format` | `""` | Custom date format |
+| `date` | `""` | Date to base version on |
+| `revision` | `""` | Explicit revision override |
+| `variant` | `""` | Explicit variant override |
+| `auto` | `"true"` | Enable branch-based variant auto-selection |
+| `backfill` | `"false"` | Backfill recent untagged commits |
+| `backfill-days` | `""` | Days to backfill from HEAD commit timestamp |
+| `backfill-all` | `"false"` | Backfill full reachable history |
+| `backfill-base-ref` | `"__unset__"` | Limit backfill to merge-base range; only passed when explicitly set |
+| `clear-branch-tags` | `"false"` | Clear tags in the selected backfill range first |
+| `apply` | `"true"` | Disable dry-run and apply tags |
+| `push` | `"true"` | Push tags to origin |
+| `show` | `""` | Show one value and exit (`calendar`, `variant`, `revision`) |
+| `verbose` | `"false"` | Enable shell trace mode (`--v`) |
+| `help` | `"false"` | Print CLI help and exit |
+
 <details>
 <summary>Wait for the completion of the workflow (example)</summary>
 
