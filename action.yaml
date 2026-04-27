@@ -81,9 +81,17 @@ runs:
       run: |
         ACTION_REPO="${GITHUB_ACTION_REPOSITORY:-acrois/calver}"
         ACTION_REF="${GITHUB_ACTION_REF:-HEAD}"
-        sudo curl -s -o /usr/local/bin/calver "https://raw.githubusercontent.com/${ACTION_REPO}/${ACTION_REF}/calver"
+        ACTION_REF="${ACTION_REF#refs/tags/}"
+        ACTION_REF="${ACTION_REF#refs/heads/}"
+        sudo curl -fsSL -o /usr/local/bin/calver "https://raw.githubusercontent.com/${ACTION_REPO}/${ACTION_REF}/calver"
         sudo chmod +x /usr/local/bin/calver
         ARGS=()
+        CALVER_HELP="$(calver --help 2>&1 || true)"
+
+        supports_flag() {
+          local flag="$1"
+          [[ "$CALVER_HELP" == *"$flag"* ]]
+        }
 
         if [ -n "${{ inputs.version }}" ]; then ARGS+=("--version=${{ inputs.version }}"); fi
         if [ -n "${{ inputs.prefix }}" ]; then ARGS+=("--prefix=${{ inputs.prefix }}"); fi
@@ -92,11 +100,11 @@ runs:
         if [ -n "${{ inputs.revision }}" ]; then ARGS+=("--revision=${{ inputs.revision }}"); fi
         if [ -n "${{ inputs.variant }}" ]; then ARGS+=("--variant=${{ inputs.variant }}"); fi
         if [ "${{ inputs.auto }}" = "true" ]; then ARGS+=("--auto"); fi
-        if [ "${{ inputs.backfill }}" = "true" ]; then ARGS+=("--backfill"); fi
-        if [ -n "${{ inputs['backfill-days'] }}" ]; then ARGS+=("--backfill-days=${{ inputs['backfill-days'] }}"); fi
-        if [ "${{ inputs['backfill-all'] }}" = "true" ]; then ARGS+=("--backfill-all"); fi
-        if [ "${{ inputs['backfill-base-ref'] }}" != "__unset__" ]; then ARGS+=("--backfill-base-ref=${{ inputs['backfill-base-ref'] }}"); fi
-        if [ "${{ inputs['clear-branch-tags'] }}" = "true" ]; then ARGS+=("--clear-branch-tags"); fi
+        if [ "${{ inputs.backfill }}" = "true" ] && supports_flag "--backfill"; then ARGS+=("--backfill"); fi
+        if [ -n "${{ inputs['backfill-days'] }}" ] && supports_flag "--backfill-days"; then ARGS+=("--backfill-days=${{ inputs['backfill-days'] }}"); fi
+        if [ "${{ inputs['backfill-all'] }}" = "true" ] && supports_flag "--backfill-all"; then ARGS+=("--backfill-all"); fi
+        if [ "${{ inputs['backfill-base-ref'] }}" != "__unset__" ] && supports_flag "--backfill-base-ref"; then ARGS+=("--backfill-base-ref=${{ inputs['backfill-base-ref'] }}"); fi
+        if [ "${{ inputs['clear-branch-tags'] }}" = "true" ] && supports_flag "--clear-branch-tags"; then ARGS+=("--clear-branch-tags"); fi
         if [ "${{ inputs.apply }}" = "true" ]; then ARGS+=("--apply"); fi
         if [ "${{ inputs.push }}" = "true" ]; then ARGS+=("--push"); fi
         if [ -n "${{ inputs.show }}" ]; then ARGS+=("--show=${{ inputs.show }}"); fi
