@@ -1,0 +1,22 @@
+name: CalVer Tagging
+on:
+  push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "**"
+permissions:
+  contents: write
+concurrency: tag-scripts
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    name: Tag revision
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Version
+        uses: acrois/calver@trunk

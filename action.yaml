@@ -1,9 +1,74 @@
 name: calver
 description: Tags commits based on CalVer strategy
 inputs:
+  version:
+    required: false
+    default: ""
+    description: Explicit calendar version to release
+  prefix:
+    required: false
+    default: ""
+    description: Prefix to prepend to generated tags
+  format:
+    required: false
+    default: ""
+    description: Custom date format
+  date:
+    required: false
+    default: ""
+    description: Date to base version off of
+  revision:
+    required: false
+    default: ""
+    description: Explicit revision override
   variant:
     required: false
+    default: ""
     description: Variant tag to pass to CalVer
+  auto:
+    required: false
+    default: "true"
+    description: Enable automatic branch-based variant selection
+  backfill:
+    required: false
+    default: "false"
+    description: Backfill recent untagged commits
+  backfill-days:
+    required: false
+    default: ""
+    description: Number of days to backfill from HEAD commit time
+  backfill-all:
+    required: false
+    default: "false"
+    description: Backfill the entire reachable history
+  backfill-base-ref:
+    required: false
+    default: "__unset__"
+    description: Limit backfill to commits after merge-base with this ref
+  clear-branch-tags:
+    required: false
+    default: "false"
+    description: Clear tags in the selected backfill range before tagging
+  apply:
+    required: false
+    default: "true"
+    description: Disable dry-run and apply tags for real
+  push:
+    required: false
+    default: "true"
+    description: Push tags to origin after applying
+  show:
+    required: false
+    default: ""
+    description: Show one value and exit (calendar, variant, revision)
+  verbose:
+    required: false
+    default: "false"
+    description: Enable verbose shell trace mode
+  help:
+    required: false
+    default: "false"
+    description: Print CalVer help output and exit
 runs:
   using: composite
   steps:
@@ -11,9 +76,70 @@ runs:
     #   uses: actions/checkout@v4
     #   with:
     #     fetch-depth: 0
-    - name: Version
+    - name: Set Author (if not set)
       shell: bash
       run: |
-        sudo curl -s -o /usr/local/bin/calver https://raw.githubusercontent.com/acrois/calver/HEAD/calver
-        sudo chmod +x /usr/local/bin/calver
-        calver --auto --apply --push
+        git config --get user.name >/dev/null || git config user.name "github-actions[bot]"
+        git config --get user.email >/dev/null || git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+    - name: Calendar Version
+      shell: bash
+      run: |
+        CALVER_BIN="${GITHUB_ACTION_PATH}/calver"
+        chmod +x "$CALVER_BIN"
+        ARGS=()
+        CALVER_HELP="$("$CALVER_BIN" --help 2>&1 || true)"
+
+        supports_flag() {
+          local flag="$1"
+          [[ "$CALVER_HELP" == *"$flag"* ]]
+        }
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          echo "[calver-action] action path: ${GITHUB_ACTION_PATH}"
+          echo "[calver-action] calver path: $CALVER_BIN"
+          echo "[calver-action] input snapshot:"
+          echo "  auto=${{ inputs.auto }} backfill=${{ inputs.backfill }} backfill-days=${{ inputs['backfill-days'] }}"
+          echo "  backfill-all=${{ inputs['backfill-all'] }} backfill-base-ref=${{ inputs['backfill-base-ref'] }}"
+          echo "  clear-branch-tags=${{ inputs['clear-branch-tags'] }} apply=${{ inputs.apply }} push=${{ inputs.push }}"
+          echo "  show=${{ inputs.show }} help=${{ inputs.help }}"
+          echo "[calver-action] supported optional flags from downloaded calver:"
+          for opt in --backfill --backfill-days --backfill-all --backfill-base-ref --clear-branch-tags; do
+            if supports_flag "$opt"; then
+              echo "  $opt: yes"
+            else
+              echo "  $opt: no"
+            fi
+          done
+        fi
+
+        if [ -n "${{ inputs.version }}" ]; then ARGS+=("--version=${{ inputs.version }}"); fi
+        if [ -n "${{ inputs.prefix }}" ]; then ARGS+=("--prefix=${{ inputs.prefix }}"); fi
+        if [ -n "${{ inputs.format }}" ]; then ARGS+=("--format=${{ inputs.format }}"); fi
+        if [ -n "${{ inputs.date }}" ]; then ARGS+=("--date=${{ inputs.date }}"); fi
+        if [ -n "${{ inputs.revision }}" ]; then ARGS+=("--revision=${{ inputs.revision }}"); fi
+        if [ -n "${{ inputs.variant }}" ]; then ARGS+=("--variant=${{ inputs.variant }}"); fi
+        if [ "${{ inputs.auto }}" = "true" ]; then ARGS+=("--auto"); fi
+        if [ "${{ inputs.backfill }}" = "true" ] && supports_flag "--backfill"; then ARGS+=("--backfill"); fi
+        if [ -n "${{ inputs['backfill-days'] }}" ] && supports_flag "--backfill-days"; then ARGS+=("--backfill-days=${{ inputs['backfill-days'] }}"); fi
+        if [ "${{ inputs['backfill-all'] }}" = "true" ] && supports_flag "--backfill-all"; then ARGS+=("--backfill-all"); fi
+        if [ "${{ inputs['backfill-base-ref'] }}" != "__unset__" ] && supports_flag "--backfill-base-ref"; then ARGS+=("--backfill-base-ref=${{ inputs['backfill-base-ref'] }}"); fi
+        if [ "${{ inputs['clear-branch-tags'] }}" = "true" ] && supports_flag "--clear-branch-tags"; then ARGS+=("--clear-branch-tags"); fi
+        if [ "${{ inputs.apply }}" = "true" ]; then ARGS+=("--apply"); fi
+        if [ "${{ inputs.push }}" = "true" ]; then ARGS+=("--push"); fi
+        if [ -n "${{ inputs.show }}" ]; then ARGS+=("--show=${{ inputs.show }}"); fi
+        if [ "${{ inputs.verbose }}" = "true" ]; then ARGS+=("--v"); fi
+        if [ "${{ inputs.help }}" = "true" ]; then ARGS+=("--help"); fi
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          if [ "${#ARGS[@]}" -eq 0 ]; then
+            echo "[calver-action] computed calver args: (none)"
+          else
+            printf '[calver-action] computed calver args:'
+            for arg in "${ARGS[@]}"; do
+              printf ' %q' "$arg"
+            done
+            printf '\n'
+          fi
+        fi
+
+        "$CALVER_BIN" "${ARGS[@]}"

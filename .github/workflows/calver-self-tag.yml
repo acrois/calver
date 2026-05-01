@@ -1,0 +1,47 @@
+name: CalVer Self Tag
+
+on:
+  push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "**"
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App token (optional)
+        if: ${{ github.server_url == 'https://github.com' }}
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        continue-on-error: true
+        with:
+          app-id: ${{ vars.APP_CLIENT_ID || secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout repository (GitHub App token)
+        if: ${{ steps.generate-token.outputs.token != '' }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Checkout repository (default token)
+        if: ${{ steps.generate-token.outputs.token == '' }}
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Apply CalVer tags
+        shell: bash
+        run: |
+          git config --get user.name >/dev/null || git config user.name "github-actions[bot]"
+          git config --get user.email >/dev/null || git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ./calver --auto --backfill-all --backfill-base-ref= --apply --push

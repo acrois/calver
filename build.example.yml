@@ -1,0 +1,68 @@
+name: Build Solution
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - '**'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  prepare-execution-matrix:
+    runs-on: 'ubuntu-latest'
+    steps:
+      - name: Watch CalVer Workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WATCH_WORKFLOW: calver.yaml
+        run: |
+          RUN_ID=$(gh run list --workflow "$WATCH_WORKFLOW" --repo="${{ github.repository }}" --commit ${{ github.sha }} --limit 1 --json databaseId --jq '.[0].databaseId')
+          gh run watch "$RUN_ID" --repo="${{ github.repository }}" --exit-status
+      - name: Checkout Repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Prepare Execution Matrix
+        id: set-matrix
+        run: |
+          export TAGS=$(git for-each-ref --format '%(refname:short)' refs/heads/ refs/tags/ | while read ref; do
+            REF_SHA=$(git rev-parse "$ref")
+            # echo "Checking $ref $REF_SHA"
+
+            if [ "$REF_SHA" = "$GITHUB_SHA" ] && perl -e 'exit (shift =~ /^(\d+)\.(\d+)\.(\d+)(?:-([\w\d_.\/-]+?))?(?:\.(\d+))*?$/ ? 0 : 1)' "$ref"; then
+              echo "$ref" | tr '/' '-'
+              # echo "MATCH: $ref"
+            fi
+          done | jq -R -s -c 'split("\n")[:-1]')
+          [ -n "$TAGS" ] || TAGS='[]'
+          echo "MATRIX=$TAGS" >> $GITHUB_OUTPUT
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.MATRIX }}
+  execute-scripts:
+    needs: prepare-execution-matrix
+    runs-on: 'ubuntu-latest'
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJson(needs.prepare-execution-matrix.outputs.matrix) }}
+    name: Build and Release
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.version }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: Build and Release
+        run: |
+          echo "Building and releasing version ${{ matrix.version }}"
+          # Add your build and release commands here, for example:
+          # ./build.sh --version ${{ matrix.version }}
+          # ./release.sh --version ${{ matrix.version }}

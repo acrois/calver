@@ -1,0 +1,25 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - "**"
+    tags-ignore:
+      - "**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Run test suite
+        shell: bash
+        run: ./tests/run.sh
