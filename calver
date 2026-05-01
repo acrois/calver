@@ -514,7 +514,7 @@ process_backfill() {
 
 usage() {
     # Substitute some defaults for useful help dialog integration...
-    FROM_DATE='2023-05-10'
+    FROM_DATE='2026-05-03'
     VARIANT='dev'
     REV=10
     FORMAT=''

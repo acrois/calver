@@ -20,6 +20,8 @@ on:
       - "**"
     tags-ignore:
       - "**"
+permissions:
+  contents: write
 concurrency: tag-scripts
 jobs:
   apply:
@@ -64,6 +66,42 @@ calver --auto --apply --push
 | `verbose`           | `"false"`     | Enable shell trace mode (`--v`)                                     |
 | `help`              | `"false"`     | Print CLI help and exit                                             |
 
+
+### Adopting Or Updating Existing Repositories
+
+The action normally pushes tags with the workflow's default `GITHUB_TOKEN`; no checkout token or extra credentials are needed for the common case. Make sure the workflow grants `contents: write`, as shown above, so GitHub Actions can create and move tags.
+
+When adopting CalVer into a repository, or updating from an older workflow, first inspect what would change from a local clone with the `calver` utility installed:
+
+```sh
+git fetch --all --tags
+calver --auto
+```
+
+If the dry run looks correct, apply and push the current commit's tags:
+
+```sh
+calver --auto --apply --push
+```
+
+This brings the repository back in line without backfilling older commits. It tags the current commit and moves the calendar or variant tag for the active stream. On `trunk`, `main`, or `master`, `--auto` emits unqualified calendar tags such as `2026.18.01`.
+
+If an older or failed workflow run left missing tags on the current branch, but you still do not want to backfill older trunk history, use a branch-scoped repair instead:
+
+```sh
+calver --auto --backfill-all --backfill-base-ref= --clear-branch-tags
+calver --auto --backfill-all --backfill-base-ref= --clear-branch-tags --apply --push
+```
+
+The empty `--backfill-base-ref=` tells `calver` to detect the primary branch and limit the repair to commits after the branch point.
+
+If a push fails with an error like:
+
+```text
+refusing to allow a GitHub App to create or update workflow `.github/workflows/calver.yaml` without `workflows` permission
+```
+
+the token pushing the tag is a GitHub App token that does not have the `workflows` permission, and at least one rejected tag points at a commit that changes a workflow file. Fix it by either running the local reconciliation above with your own authenticated git credentials, granting the GitHub App `workflows` permission, or removing the custom checkout token and using the default `GITHUB_TOKEN` with `contents: write` when app credentials are not required.
 
 Wait for the completion of the workflow (example)
 

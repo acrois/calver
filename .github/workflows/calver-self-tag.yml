@@ -42,6 +42,6 @@ jobs:
       - name: Apply CalVer tags
         shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --get user.name >/dev/null || git config user.name "github-actions[bot]"
+          git config --get user.email >/dev/null || git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           ./calver --auto --backfill-all --backfill-base-ref= --apply --push
